@@ -13,14 +13,10 @@ from api import models, crud, schemas
 BASE_DIR = Path(__file__).resolve().parent.parent
 API_DIR = Path(__file__).resolve().parent
 
+_db_initialized = False
+
 
 def seed_initial_data(db: Session):
-    try:
-        if db.query(models.Book).count() > 0:
-            return
-    except Exception:
-        pass
-
     sample_books = [
         schemas.BookCreate(
             title="Clean Code: A Handbook of Agile Software Craftsmanship",
@@ -106,24 +102,26 @@ def seed_initial_data(db: Session):
             pass
 
 
-def init_db():
+def ensure_db_initialized():
+    global _db_initialized
+    if _db_initialized:
+        return
     try:
         Base.metadata.create_all(bind=engine)
         db = SessionLocal()
         try:
-            seed_initial_data(db)
+            if db.query(models.Book).count() == 0:
+                seed_initial_data(db)
         finally:
             db.close()
+        _db_initialized = True
     except Exception as e:
         print("Database initialization notice:", e)
 
 
-init_db()
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
+    ensure_db_initialized()
     yield
 
 
@@ -185,7 +183,7 @@ def serve_static(file_path: str):
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():
-    init_db()
+    ensure_db_initialized()
     content = get_template_content()
     if content:
         return HTMLResponse(content=content)

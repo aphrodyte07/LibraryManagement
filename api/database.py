@@ -5,7 +5,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
-    if os.getenv("VERCEL"):
+    if os.getenv("VERCEL") or os.getenv("AWS_LAMBDA_FUNCTION_NAME"):
         DATABASE_URL = "sqlite:////tmp/library.db"
     else:
         DATABASE_URL = "sqlite:///./library.db"
