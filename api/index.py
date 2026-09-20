@@ -7,17 +7,18 @@ from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-from api.database import engine, Base, get_db
+from api.database import engine, Base, SessionLocal, get_db
 from api.routers import books, members, loans
 from api import models, crud, schemas
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-Base.metadata.create_all(bind=engine)
-
 
 def seed_initial_data(db: Session):
-    if db.query(models.Book).count() > 0:
+    try:
+        if db.query(models.Book).count() > 0:
+            return
+    except Exception:
         return
 
     sample_books = [
@@ -105,14 +106,24 @@ def seed_initial_data(db: Session):
             pass
 
 
+def init_db():
+    try:
+        Base.metadata.create_all(bind=engine)
+        db = SessionLocal()
+        try:
+            seed_initial_data(db)
+        finally:
+            db.close()
+    except Exception as e:
+        print("Database initialization error:", e)
+
+
+init_db()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    Base.metadata.create_all(bind=engine)
-    db = next(get_db())
-    try:
-        seed_initial_data(db)
-    finally:
-        db.close()
+    init_db()
     yield
 
 
@@ -145,4 +156,5 @@ app.include_router(loans.router)
 
 @app.get("/")
 def read_root(request: Request):
+    init_db()
     return templates.TemplateResponse("index.html", {"request": request})
