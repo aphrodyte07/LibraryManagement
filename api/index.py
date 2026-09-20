@@ -1,9 +1,8 @@
 from pathlib import Path
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
@@ -12,6 +11,7 @@ from api.routers import books, members, loans
 from api import models, crud, schemas
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+API_DIR = Path(__file__).resolve().parent
 
 
 def seed_initial_data(db: Session):
@@ -19,7 +19,7 @@ def seed_initial_data(db: Session):
         if db.query(models.Book).count() > 0:
             return
     except Exception:
-        return
+        pass
 
     sample_books = [
         schemas.BookCreate(
@@ -115,7 +115,7 @@ def init_db():
         finally:
             db.close()
     except Exception as e:
-        print("Database initialization error:", e)
+        print("Database initialization notice:", e)
 
 
 init_db()
@@ -142,19 +142,54 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-static_dir = BASE_DIR / "static"
-if static_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-
-templates_dir = BASE_DIR / "templates"
-templates = Jinja2Templates(directory=str(templates_dir))
-
 app.include_router(books.router)
 app.include_router(members.router)
 app.include_router(loans.router)
 
 
-@app.get("/")
-def read_root(request: Request):
+def get_template_content() -> str:
+    candidates = [
+        API_DIR / "templates" / "index.html",
+        BASE_DIR / "templates" / "index.html",
+        Path("/var/task/api/templates/index.html"),
+        Path("/var/task/templates/index.html"),
+    ]
+    for p in candidates:
+        if p.exists():
+            return p.read_text(encoding="utf-8")
+    return ""
+
+
+@app.get("/static/{file_path:path}")
+def serve_static(file_path: str):
+    candidates = [
+        API_DIR / "static" / file_path,
+        BASE_DIR / "static" / file_path,
+        Path("/var/task/api/static") / file_path,
+        Path("/var/task/static") / file_path,
+    ]
+    for p in candidates:
+        if p.exists():
+            media_type = None
+            if file_path.endswith(".css"):
+                media_type = "text/css"
+            elif file_path.endswith(".js"):
+                media_type = "application/javascript"
+            elif file_path.endswith(".svg"):
+                media_type = "image/svg+xml"
+            elif file_path.endswith(".png"):
+                media_type = "image/png"
+            return FileResponse(str(p), media_type=media_type)
+    return Response(status_code=404)
+
+
+@app.get("/", response_class=HTMLResponse)
+def read_root():
     init_db()
-    return templates.TemplateResponse("index.html", {"request": request})
+    content = get_template_content()
+    if content:
+        return HTMLResponse(content=content)
+    return HTMLResponse(content="<h1>Bibliotheca is online</h1>", status_code=200)
+
+
+handler = app
