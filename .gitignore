@@ -1,0 +1,18 @@
+# Python virtualenv & cache
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+
+# Environment files
+.env
+.env.local
+
+# SQLite local database files
+*.db
+library.db
+
+# Vercel folder
+.vercel/
